@@ -25,4 +25,7 @@ conda env update --file environment.yml
 python indexing.py
 ```
 
-2. 
+2. Retrieval 평가
+```bash
+python retrieval.py
+```

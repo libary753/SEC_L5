@@ -9,13 +9,7 @@ git clone --recursive https://github.com/libary753/SE_LMM.git
 ```
 
 ```bash
-cd submodules/janus
-pip install -e .
-```
-
-Janus 설치 후에 나머지 패키지 설치
-```bash
-conda env update --file environment.yml
+git commit -m "Update environment setup"
 ```
 
 되는지 확실하지 않음 하다가 오류 생기면 문의 ㄱㄱ

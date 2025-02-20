@@ -4,6 +4,7 @@ from  tqdm import tqdm
 from janus.utils.io import load_pil_images
 import json
 from utils import load_janus, load_slideVQA_images
+from json_repair import repair_json
 
 json_prefix = '```json\n{'
 
@@ -135,7 +136,6 @@ def extract_data_from_slide_image(image_path, vlm, tokenizer, vl_chat_processor)
     answer = answer[8:-4]
     # 4.3. Json 포맷을 어기는 경우가 종종 발생함. 따라서, json_repair 패키지를 이용해서 json 틀린 부분 수정
     try:
-        from json_repair import repair_json
         fixed_json = repair_json(answer)
         # 4.4.json string으로부터 dictionary 생성
         data = json.loads(fixed_json) 
@@ -211,7 +211,6 @@ def extract_data_from_overall_data(datas, vlm, tokenizer, vl_chat_processor):
     answer = answer[8:-4]
     # 5.2. json 오류 보정 (extract_data_from_overall_data 함수에서와 동일)
     try:
-        from json_repair import repair_json
         fixed_json = repair_json(answer)
         data = json.loads(fixed_json)
     except Exception as e:

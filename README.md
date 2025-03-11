@@ -1,25 +1,37 @@
-# SE_LMM
-삼성 멀티모달과제
+# L5. 멀티모달 학습 데이터 생성 및 활용 연구
 
-SE_LMM 폴더 내에 SlideVQA 폴더에 SlideVQA 데이터셋 저장 필요
-utils.py에 하드코딩해놨는데, 그냥 맞춰서 가는 게 편할 것 같음
-
+## 1. 환경 셋업
 ```bash
-git clone --recursive https://github.com/libary753/SE_LMM.git
-```
-
-```bash
+git clone --recursive https://github.com/libary753/SEC_L5.git
+cd SEC_L5
+conda create -n sec_l5 python=3.10
+conda activate sec_l5
+pip install -e ./submodules/janus
 pip install -r requirements.txt
 ```
 
-되는지 확실하지 않음 하다가 오류 생기면 문의 ㄱㄱ
+## 2. 데이터셋 준비
+루트 경로 내에 SlideVQA 데이터셋 복사
 
-1. SlideVQA 데이터 인덱싱
-```bash
-python indexing.py
-```
+> SEC_LMM  
+> ├ SlideVQA  
+> │ ├ annotations  
+> │ ├ images  
+> │ ├ ...  
+> ├ ...
 
-2. Retrieval 평가
-```bash
-python retrieval.py
-```
+## 3. Text-to-Document retrieval
+
+### 3.1. Parsing
+python indexing.py --out_dir output/indexing_t2d
+
+### 3.3. Retrieval
+python retrieval_t2d.py --out_dir output/indexing_t2d
+
+## 4. Image-to-Document retrieval
+
+### 4.1. Parsing
+python indexing.py --out_dir output/indexing_i2d
+
+### 4.2. Retrieval
+python retrieval_i2d.py --out_dir output/indexing_t2d

@@ -1,0 +1,11 @@
+name: janus
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - tqdm
+  - pip:
+      - -e submodules/janus
+      - json-repair

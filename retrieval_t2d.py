@@ -26,6 +26,7 @@ def get_user_prompot(prompt):
     }
     
 def get_assistant_prompot(prompt):
+    
     return {
         "role": "<|Assistant|>",
         "content": f"{prompt}",
@@ -55,7 +56,7 @@ def generate_tags(
     vlm, 
     tokenizer, 
     vl_chat_processor,
-    beam_size=8,
+    beam_size=16,
     max_tag_len=128,
     temperature=1,
     ):
@@ -188,7 +189,11 @@ def retrieval(
     vl_chat_processor,
     ):
     top_1 = 0
+    top_3 = 0
+    top_10 = 0
     sampled = 0
+    
+    total = len(queries)
     
     # Query들에 대한 평가
     for cnt, query in enumerate(queries):
@@ -212,25 +217,37 @@ def retrieval(
             next = trie.trie
             for id in generated_ids:
                 next = next.children[int(id)]    
-            print(next.data)
+            print#(next.data)
             tags += next.data
         
         # 4. 가장 많이 나온 deck이 정답 deck과 일치하는지 확인 -> Top 1 recall
         count_dict = Counter(tags)  
         if deck_idx == max(count_dict, key=count_dict.get):
             top_1+=1
+        top_3_preds = [deck for deck, _ in count_dict.most_common(3)]  # 🔹 상위 3개 예측
+        print(top_3_preds)
+        if deck_idx in top_3_preds:
+            top_3 += 1
+        top_10_preds = [deck for deck, _ in count_dict.most_common(10)]  # 🔹 상위 3개 예측
+        print(top_10_preds)
+        if deck_idx in top_10_preds:
+            top_10 += 1
         # 6. 정답 deck이 candidates에 있는지 확인 -> In candidates
         if deck_idx in count_dict:
             sampled+=1
         
+        print(f"Idx: {cnt+1} Deck idx: {deck_idx} total: {total}")
         print(f"Top 1: {top_1/(cnt+1)*100:0.2f}")
+        print(f"Top 3: {top_3/(cnt+1)*100:0.2f}")
+        print(f"Top 10: {top_10/(cnt+1)*100:0.2f}")
         print(f"In candidates: {sampled/(cnt+1)*100:0.2f}")
         print(f"-------------------------------------")
 
     # 결과 표시
-    total = len(queries)
     print(f"Total: {total}")
     print(f"Top 1: {top_1/total*100:0.2f}")
+    print(f"Top 3: {top_3/total*100:0.2f}")
+    print(f"Top 10: {top_10/total*100:0.2f}")
     print(f"In candidates: {sampled/total*100:0.2f}")
 
 if __name__ == "__main__":

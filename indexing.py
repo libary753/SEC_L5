@@ -3,32 +3,34 @@ import torch
 from  tqdm import tqdm
 from janus.utils.io import load_pil_images
 import json
-from utils import load_janus, load_slideVQA_images
+from transformers.generation import GenerationConfig
+from utils import load_janus, load_slideVQA_images, str2bool
 from json_repair import repair_json
+import argparse
 
 json_prefix = '```json\n{'
 
 json_schema_slide = """```json
 {
-  "title": @@@,
-  "content": @@@,
+  "title": "PLACEHOLDER_TITLE",
+  "content": "PLACEHOLDER_CONTENT",
   "metadata": {
-    "tags": [@@@],  # As many as possible
-    "tl;dr": @@@
-    "has_figures": @@@,  # True or False
-    "has_equation": @@@,  # True or False
+    "tags": ["PLACEHOLDER_TAG"],  # Provide as many relevant tags as possible
+    "tl;dr": "PLACEHOLDER_SUMMARY",
+    "has_figures": PLACEHOLDER_BOOLEAN,  # True or False
+    "has_equation": PLACEHOLDER_BOOLEAN  # True or False
   },
   "figures": [
     {
-      "figure_description": @@@,
-      "figure_tags": [@@@],  # As many as possible
-      "tl;dr": @@@
+      "figure_description": "PLACEHOLDER_FIGURE_DESCRIPTION",
+      "figure_tags": ["PLACEHOLDER_FIGURE_TAG"],  # Provide as many relevant tags as possible
+      "tl;dr": "PLACEHOLDER_FIGURE_SUMMARY"
     }
   ],
   "equations": [
     {
-      "equation_description": @@@,
-      "latex": @@@
+      "equation_description": "PLACEHOLDER_EQUATION_DESCRIPTION",
+      "latex": "PLACEHOLDER_LATEX"
     }
   ]
 }
@@ -36,16 +38,43 @@ json_schema_slide = """```json
 
 json_schema_deck = """```json
 {
-  "title": @@@,
-  "content": @@@,
+  "title": "PLACEHOLDER_TITLE",
+  "content": "PLACEHOLDER_CONTENT",
   "metadata": {
-    "tags": [@@@],  # As many as possible
-    "tl;dr": @@@
+    "tags": ["PLACEHOLDER_TAG"],  # Provide as many relevant tags as possible
+    "tl;dr": "PLACEHOLDER_SUMMARY"
+    "has_figures": PLACEHOLDER_BOOLEAN,  # True or False
+    "has_equation": PLACEHOLDER_BOOLEAN  # True or False
+  }
 }
 ```"""
 
+prompt_slide = """Fill in the following JSON structure based on the given context.
+- The `"title"` should be a concise and descriptive heading.
+- The `"content"` should be a well-structured, informative explanation.
+- The `"metadata.tags"` should include relevant keywords.
+- The `"metadata.tl;dr"` should provide a short summary of the content.
+- The `"has_figures"` and `"has_equation"` should be `true` if applicable, otherwise `false`.
+- `"figures"` and `"equations"` should contain detailed descriptions if relevant.
+JSON Structure:
+"""
+
+prompt_deck = """Summarize the content based on the provided JSON schema.  
+- `"title"` should be the main topic of the document.
+- `"content"` should include an overview of the topic.
+- `"metadata.tags"` should be relevant to the subject.
+- `"metadata.tl;dr"` should provide a concise summary.
+JSON Structure:
+"""
+
+prompt_deck_pre = """I am about to show you 20 JSON objects representing individual slides from a PowerPoint presentation.  
+Each JSON object follows the structure defined in the schema below.  
+
+Please analyze the provided JSON data carefully, as it contains structured information about each slide, including its title, content, metadata, figures, and equations.
+"""
+
 def check_slide_json(data):
-    print(data)
+    # print(data)
     # json 무결성 검사
     if "title" not in data:
         data["title"] = "Err"
@@ -70,7 +99,7 @@ def check_slide_json(data):
 
 def check_deck_json(data):
     # json 무결성 검사
-    print(data)
+    # print(data)
     if "title" not in data:
         data["title"] = "Err"
     if "content" not in data:
@@ -92,6 +121,11 @@ def extract_data_from_slide_image(image_path, vlm, tokenizer, vl_chat_processor)
     conversation.append(
     {
         "role": "<|User|>",
+        "content": prompt_deck_pre,
+    })
+    conversation.append(
+    {
+        "role": "<|User|>",
         "content": f"<image_placeholder>\n",
         "images": [image_path],
     })
@@ -99,7 +133,7 @@ def extract_data_from_slide_image(image_path, vlm, tokenizer, vl_chat_processor)
     conversation.append(
     {
         "role": "<|User|>",
-        "content": f"Fill in the @@@ parts of the following JSON schema. Generate as many tags as possible. Do not hallucinate. {json_schema_slide}",
+        "content": f"{prompt_slide}\n{json_schema_slide}",
     })
     # 1.3. 세 번째 conversation은 assistant가 답변하는 양식의 앞부분을 넣어줌 -> 이래야 잘됨.
     conversation.append({"role": "<|Assistant|>", "content": f'{json_prefix}'},)        
@@ -114,8 +148,7 @@ def extract_data_from_slide_image(image_path, vlm, tokenizer, vl_chat_processor)
     # 2.3. input에 맞는 embedding으로 변환
     inputs_embeds = vlm.prepare_inputs_embeds(**prepare_inputs)
 
-    # 3. VLM inference -> 여기는 쉬움
-    # 3.1. Generate
+    # 3. VLM inference -> 여기는 쉬움    
     outputs = vlm.language_model.generate(
         inputs_embeds=inputs_embeds,
         attention_mask=prepare_inputs.attention_mask,
@@ -141,21 +174,38 @@ def extract_data_from_slide_image(image_path, vlm, tokenizer, vl_chat_processor)
         data = json.loads(fixed_json) 
     except Exception as e:
         print("failed to parse json")
+        print(answer)
         data = {}
+        
     # 4.5. 4.3을 해도 json 스키마를 벗어나는 경우는 해결 못함. 특히, json이 딕셔너리가 아니라 리스트를 생성하는 경우 오류 발생. 이 경우는 그냥 기본 json format으로 변환
     # TODO: 현재는 오류가 슬라이드를 포기하는 전략 -> 수정해야함
     try:
         data = check_slide_json(data)
     except Exception as e:
         print("failed to parse json")
+        print(answer)
         data = {}
         data = check_slide_json(data)
     
     # 5. 생성한 dictionary 데이터 
     return data
 
+json_schema_tag_refine = """```json
+{
+  "title": @,
+  "content": @,
+  "metadata": {
+    "tags": [@],  # As many as possible
+    "tl;dr": @
+}
+```"""
+
+def refine_tag():
+    # Image와 Tag를 보여주고, tag가 잘 나왔는지 체크    
+    return    
+
 # 20장의 slide 데이터로부터 전체를 요약하는 json을 생성함 -> 아직까지는 크게 유용하지는 않음.
-def extract_data_from_overall_data(datas, vlm, tokenizer, vl_chat_processor):
+def extract_data_from_overall_data(datas, vlm, tokenizer, vl_chat_processor, refine=True):
     # 1. 20장의 slide 데이터를 하나의 json으로 연결
     deck_info = []
     for data in datas:
@@ -181,7 +231,7 @@ def extract_data_from_overall_data(datas, vlm, tokenizer, vl_chat_processor):
     conversation.append(
     {
         "role": "<|User|>",
-        "content": f"Fill in the @@@ parts of the following JSON schema. Generate as many tags as possible. Do not hallucinate. {json_schema_deck}",
+        "content": f"{prompt_deck}\n{json_schema_deck}",
     })
     conversation.append({"role": "<|Assistant|>", "content": f'{json_prefix}'},)        
 
@@ -200,6 +250,7 @@ def extract_data_from_overall_data(datas, vlm, tokenizer, vl_chat_processor):
         bos_token_id=tokenizer.bos_token_id,
         eos_token_id=tokenizer.eos_token_id,
         max_new_tokens=512,
+        return_legacy_cache=True,
         do_sample=False,
         use_cache=True,
     )
@@ -224,15 +275,23 @@ def extract_data_from_overall_data(datas, vlm, tokenizer, vl_chat_processor):
         data = {}
         data = check_deck_json(data)
     return data
-    
+ 
 # 생성된 
-def indexing(decks, vlm, tokenizer, vl_chat_processor, out_dir="output/indexing", subset=-1):
+def indexing(decks, vlm, tokenizer, vl_chat_processor, out_dir="output/indexing", skip_1st_page=False, subset=-1, overwrite=True):
     os.makedirs(out_dir, exist_ok=True)
     
-    for deck_id, deck in tqdm(enumerate(decks)):    
+    for deck_id, deck in tqdm(enumerate(decks), total=len(decks)):  
+        deck_name = deck["deck_name"]  
+        output_json_path = os.path.join(out_dir, f"{deck_name}.json")
+        if not overwrite and os.path.exists(output_json_path):
+            # print("pass")
+            continue
+        
         # 1. 각 슬라이드 파싱해서 dict 생성
         slide_datas = []
-        for i in tqdm(range(20), leave=False):
+        for i in range(20):
+            if skip_1st_page and i==0:
+                continue
             data = extract_data_from_slide_image(deck["image_paths"][i], vlm, tokenizer, vl_chat_processor)
             data["image_name"] = deck["image_names"][i]
             slide_datas.append(data)
@@ -247,8 +306,7 @@ def indexing(decks, vlm, tokenizer, vl_chat_processor, out_dir="output/indexing"
         }
         
         # 3. 각 deck별로 하나의 json으로 저장
-        deck_name = deck["deck_name"]
-        with open(os.path.join(out_dir, f"{deck_name}.json"), "w", encoding="utf-8") as f:
+        with open(output_json_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
         
         # 4. 사전에 지정한 subset 까지만 indexing -> 디버깅용
@@ -257,8 +315,15 @@ def indexing(decks, vlm, tokenizer, vl_chat_processor, out_dir="output/indexing"
                 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--skip_1st_page", type=str2bool, default=False)
+    parser.add_argument("--out_dir", type=str, default="output/indexing")
+    parser.add_argument("--dataset_base_dir", type=str, default="SlideVQA")
+    
+    
+    args = parser.parse_args()
+    
     vlm, tokenizer, vl_chat_processor = load_janus() # 1. janus 모델 로드
     decks = load_slideVQA_images() # 2.slideVQA 데이터셋 로드
-    indexing(decks, vlm, tokenizer, vl_chat_processor, subset=30) # 3. 인덱싱 -> 덱별로 json 저장
-    
+    indexing(decks, vlm, tokenizer, vl_chat_processor, out_dir=args.out_dir, skip_1st_page=args.skip_1st_page) # 3. 인덱싱 -> 덱별로 json 저장
     

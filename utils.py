@@ -3,6 +3,7 @@ import torch
 from transformers import AutoModelForCausalLM
 from janus.models import MultiModalityCausalLM, VLChatProcessor
 import json
+import argparse
 
 def load_janus():
     model_path = "deepseek-ai/Janus-Pro-7B"
@@ -57,13 +58,14 @@ def load_slideVQA_annotations(decks, slideVQA_base_dir:str = "SlideVQA", split =
                 
     return queries
           
-def load_index(index_path):
+def load_index(index_path, skip_1st=False):
     deck_jsons = os.listdir(index_path)
     tag_dict = {} # key: tag 이름, value: tag에 해당하는 deck의 index들 list
     deck_dict = {} # key: deck 이름, value: deck에 포함된 모든 tag들 list
     decks = [] # deck name list -> tag_dict와의 매칭을 위해 필요함. 여기서의 순서가 deck의 index
     deck_indices = {} # key: deck 이름, value: deck 번호 -> tag_dict와의 매칭을 위해 필요함
-
+    deck_1st_names = []
+    
     for deck_idx, deck in enumerate(deck_jsons):    
         deck_path = os.path.join(index_path, deck)
         
@@ -74,6 +76,10 @@ def load_index(index_path):
         # 2. deck data 로드
         with open(deck_path, "r", encoding="utf-8") as f:
             data = json.load(f)
+        
+        if skip_1st and deck_idx == 0:
+            deck_1st_names.append(data["slide_datas"][0]["image_name"])
+            data["slide_datas"] = data["slide_datas"][1:]
         
         tags = []
         
@@ -100,3 +106,13 @@ def load_index(index_path):
         deck_indices[deck_name] = deck_idx
         
     return tag_dict, deck_dict, decks, deck_indices
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")

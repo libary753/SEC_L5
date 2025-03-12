@@ -318,9 +318,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip_1st_page", type=str2bool, default=False)
     parser.add_argument("--out_dir", type=str, default="output/indexing")
-    parser.add_argument("--dataset_base_dir", type=str, default="SlideVQA")
-    
-    
+    parser.add_argument("--dataset_base_dir", type=str, default="SlideVQA") 
     args = parser.parse_args()
     
     vlm, tokenizer, vl_chat_processor = load_janus() # 1. janus 모델 로드

@@ -5,6 +5,7 @@ from utils import load_janus, load_slideVQA_annotations, load_index
 import torch
 from tqdm import tqdm
 from collections import Counter
+import argparse
 
 # trie 만들기
 def build_trie(vlm, tokenizer, vl_chat_processor):
@@ -252,7 +253,12 @@ def retrieval(
 
 if __name__ == "__main__":
     # 1. 인덱싱해둔 데이터셋 로드
-    tag_dict, deck_dict, decks, deck_indices = load_index("output/indexing")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--index_dir", type=str, default="output/indexing_t2d")
+    parser.add_argument("--dataset_base_dir", type=str, default="SlideVQA")
+    args = parser.parse_args()
+    
+    tag_dict, deck_dict, decks, deck_indices = load_index(args.index_dir)
     
     # 2. Trie 생성
     # 2.1 Janus 로드
@@ -260,7 +266,7 @@ if __name__ == "__main__":
     trie = build_trie(vlm, tokenizer, vl_chat_processor)
     
     # 3. Annotation 데이터셋 로드
-    queries = load_slideVQA_annotations(decks, "SlideVQA", "test")
+    queries = load_slideVQA_annotations(decks, args.dataset_base_dir, "test")
     
     # 4. query들에 대해 tag 생성하고, tag들을 포함하는 deck들을 이용하여 성능 집계
     retrieval(queries, trie, vlm, tokenizer, vl_chat_processor)

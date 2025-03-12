@@ -116,3 +116,17 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError("Boolean value expected.")
+
+def get_user_prompot(prompt):
+    res = {
+        "role": "<|User|>",
+        "content": f"{prompt}",
+    }
+    return res
+    
+def get_assistant_prompot(prompt):  
+    res = {
+        "role": "<|Assistant|>",
+        "content": f"{prompt}",
+    }  
+    return res

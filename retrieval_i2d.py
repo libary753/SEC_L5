@@ -1,11 +1,21 @@
 import os
 import json
 from trie import Trie
-from utils import load_janus, load_slideVQA_annotations, load_index, str2bool
+from utils import load_janus, load_slideVQA_annotations, load_index, str2bool, get_user_prompot, get_assistant_prompot
 import torch
 from tqdm import tqdm
 from collections import Counter
+from janus.utils.io import load_pil_images
 import argparse
+
+prompt = """I will show you a PowerPoint slide.  
+Your task is to analyze its content and suggest a set of keywords that can be used for retrieving relevant documents.  
+
+- Focus on **key topics, concepts, and entities** present in the slide.  
+- Provide a **concise yet precise** list of keywords that best capture the slide’s meaning.  
+- Prioritize **domain-specific terms, technical jargon, and important phrases** that accurately represent the content.  
+- Avoid overly generic words that might reduce the effectiveness of the retrieval process.
+"""
 
 # trie 만들기
 def build_trie(vlm, tokenizer, vl_chat_processor):
@@ -20,59 +30,37 @@ def build_trie(vlm, tokenizer, vl_chat_processor):
     trie = Trie(input_ids, deck_ids) # input_ids로 trie를 만들고, leaf에 deck_ids를 저장함
     return trie
 
-def get_user_prompot(prompt):
-    return {
-        "role": "<|User|>",
-        "content": f"{prompt}",
-    }
-    
-def get_assistant_prompot(prompt):
-    
-    return {
-        "role": "<|Assistant|>",
-        "content": f"{prompt}",
-    }
-
-# Retrieval을 위한 few shot samples
-def get_few_shot_conversations():    
-    conversation = []
-    conversation.append(get_user_prompot("From now on, you are an assistant that helps with retrieval."))
-    conversation.append(get_user_prompot("Query: How many online shopping orders are made per month in CY2013 in India?"))
-    conversation.append(get_assistant_prompot("Tag: india, online shopping, CY2013"))
-    conversation.append(get_user_prompot("Query: Which country is the researcher with the Twitter handle @doqtu84 giving a Group-buying Market Overview of?"))
-    conversation.append(get_assistant_prompot("Tag: @doqtu84, Group-buying Market Overview"))
-    conversation.append(get_user_prompot("Query: Which is most expensive among iOS, Android, and Windows?"))
-    conversation.append(get_assistant_prompot("Tag: iOS, Android, Windows"))
-    conversation.append(get_user_prompot("Query: What mobile game is shown in the presentation?"))
-    conversation.append(get_assistant_prompot("Tag: mobile game"))
-    conversation.append(get_user_prompot("Query: What is Fonny Schenck's phone number?"))
-    conversation.append(get_assistant_prompot("Tag: Fonny Schenck"))
-    conversation.append(get_user_prompot("Query: What is the structure into which glomeruler filtrate filters through the glomeruli part of?"))
-    conversation.append(get_assistant_prompot("Tag: glomeruler, filtrate, filters"))
-    return conversation
-
 def generate_tags(
     query, 
     trie,
     vlm, 
     tokenizer, 
     vl_chat_processor,
-    beam_size=16,
+    beam_size=32,
     max_tag_len=128,
     temperature=1,
     ):
     # 1. Conversation 생성
-    # 1.1. Few-shot 프롬프트 생성
-    conversation = get_few_shot_conversations()
-    # 1.2. query 추가
-    conversation.append(get_user_prompot(f"Query: {query}"))
-    # 1.3. Assistant prompt 추가
-    conversation.append(get_assistant_prompot("Tag: "))
+    # 1.1. image query는 fewshot prompt 미사용 
+    #   -> 이미지당 token수가 너무 많아서, 여러 이미지를 입력으로 넣으면 fewshot 성능이 잘 나오지 않는 것으로 추정
+    #   -> TODO: 검증 필요
+    conversation = []
+    # 1.2. User prompt 추가
+    conversation.append(get_user_prompot(prompt))
+    # 1.3. 이미지 추가
+    conversation.append(
+    {
+        "role": "<|User|>",
+        "content": f"<image_placeholder>\n",
+        "images": [query],
+    })
+    # 1.4. assistant prefix 추가
+    conversation.append(get_assistant_prompot("Keywords: "))
 
     # 2 Input 전처리
-    # 이제 이미지가 없기 때문에, images에는 빈 list를 넘겨줌
+    pil_images = load_pil_images(conversation)
     prepare_inputs = vl_chat_processor(
-        conversations=conversation, images=[], force_batchify=True
+        conversations=conversation, images=pil_images, force_batchify=True
     ).to(vlm.device)
     inputs_embeds = vlm.prepare_inputs_embeds(**prepare_inputs)
     
@@ -179,7 +167,6 @@ def generate_tags(
                     outputs.past_key_values.value_cache[l] = value_buffer
             else:
                 break
-            
     return generated_tags
 
 def retrieval(
@@ -265,21 +252,30 @@ def load_slideVQA_annotations_i2d(deck_dict):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--index_dir", type=str, default="output/indexing")
+    parser.add_argument("--index_dir", type=str, default="output/indexing_i2d")
     parser.add_argument("--dataset_base_dir", type=str, default="SlideVQA")
     args = parser.parse_args()
     
     # 1. 인덱싱해둔 데이터셋 로드
     tag_dict, deck_dict, decks, deck_indices = load_index(args.index_dir, skip_1st=True)
     
+    # 1.2. 각 덱의 가장 첫 이미지 경로 가져오기 -> Query로 사용
+    queries = []
+    for deck in decks:
+        deck_dir = os.path.join(args.dataset_base_dir, "images", "test", deck)
+        images = os.listdir(deck_dir)
+        images.sort()
+        query={
+            "deck_name": deck,
+            "question": os.path.join(deck_dir, images[0])
+        }
+        queries.append(query)
+    
     # 2. Trie 생성
     # 2.1 Janus 로드
     vlm, tokenizer, vl_chat_processor = load_janus()
     # 2.2 Trie 빌드
     trie = build_trie(vlm, tokenizer, vl_chat_processor)
-    
-    # 3. Annotation 데이터셋 로드
-    queries = load_slideVQA_annotations(deck_dict)
     
     # 4. query들에 대해 tag 생성하고, tag들을 포함하는 deck들을 이용하여 성능 집계
     retrieval(queries, trie, vlm, tokenizer, vl_chat_processor)

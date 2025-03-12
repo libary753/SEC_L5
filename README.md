@@ -23,15 +23,15 @@ pip install -r requirements.txt
 ## 3. Text-to-Document retrieval
 
 ### 3.1. Parsing
-python indexing.py --out_dir output/indexing_t2d
+python parsing.py --out_dir output/parsing_t2d
 
 ### 3.3. Retrieval
-python retrieval_t2d.py --out_dir output/indexing_t2d
+python retrieval_t2d.py --out_dir output/parsing_t2d
 
 ## 4. Image-to-Document retrieval
 
 ### 4.1. Parsing
-python indexing.py --out_dir output/indexing_i2d
+python parsing.py --out_dir output/parsing_i2d
 
 ### 4.2. Retrieval
-python retrieval_i2d.py --out_dir output/indexing_t2d
+python retrieval_i2d.py --out_dir output/parsing_t2d

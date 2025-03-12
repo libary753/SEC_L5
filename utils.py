@@ -58,7 +58,7 @@ def load_slideVQA_annotations(decks, slideVQA_base_dir:str = "SlideVQA", split =
                 
     return queries
           
-def load_index(index_path, skip_1st=False):
+def load_parsing_results(index_path, skip_1st=False):
     deck_jsons = os.listdir(index_path)
     tag_dict = {} # key: tag 이름, value: tag에 해당하는 deck의 index들 list
     deck_dict = {} # key: deck 이름, value: deck에 포함된 모든 tag들 list

@@ -1,5 +1,17 @@
 from typing import List
  
+# trie 만들기
+def build_trie(tag_dict, vl_chat_processor):
+    # Keyword들을 encoding
+    input_ids = []
+    deck_ids = []
+    for tag, deck_idx in tag_dict.items():
+        input_id = vl_chat_processor.tokenizer.encode(tag)[1:]
+        input_ids.append(input_id)
+        deck_ids.append(deck_idx)
+    trie = Trie(input_ids, deck_ids) # input_ids로 trie를 만들고, leaf에 deck_ids를 저장함
+    return trie
+        
 class TrieNode:
     def __init__(self):
         self.children = {} # 자식 index들 -> 다음 순서의 token index

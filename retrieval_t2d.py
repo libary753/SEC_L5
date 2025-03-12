@@ -1,24 +1,11 @@
 import os
 import json
-from trie import Trie
-from utils import load_janus, load_slideVQA_annotations, load_index
+from trie import Trie, build_trie
+from utils import load_janus, load_slideVQA_annotations, load_parsing_results, get_user_prompot, get_assistant_prompot
 import torch
 from tqdm import tqdm
 from collections import Counter
 import argparse
-
-# trie 만들기
-def build_trie(vlm, tokenizer, vl_chat_processor):
-    # Keyword들을 encoding
-    input_ids = []
-    deck_ids = []
-    for tag, deck_idx in tag_dict.items():
-        input_id = vl_chat_processor.tokenizer.encode(tag)[1:]
-        input_ids.append(input_id)
-        deck_ids.append(deck_idx)
-        
-    trie = Trie(input_ids, deck_ids) # input_ids로 trie를 만들고, leaf에 deck_ids를 저장함
-    return trie
 
 def get_user_prompot(prompt):
     return {
@@ -90,6 +77,7 @@ def generate_tags(
     inputs_embeds = inputs_embeds.repeat((beam_size, 1, 1))
     
     # 4. Trie를 따라서 tag generation -> retrieval
+    outputs = None
     with torch.no_grad():
         for i in tqdm(range(max_tag_len)):
             # 4.1. Vlm inference
@@ -254,16 +242,16 @@ def retrieval(
 if __name__ == "__main__":
     # 1. 인덱싱해둔 데이터셋 로드
     parser = argparse.ArgumentParser()
-    parser.add_argument("--index_dir", type=str, default="output/indexing_t2d")
+    parser.add_argument("--index_dir", type=str, default="output/parsing_t2d")
     parser.add_argument("--dataset_base_dir", type=str, default="SlideVQA")
     args = parser.parse_args()
     
-    tag_dict, deck_dict, decks, deck_indices = load_index(args.index_dir)
+    tag_dict, deck_dict, decks, deck_indices = load_parsing_results(args.index_dir)
     
     # 2. Trie 생성
     # 2.1 Janus 로드
     vlm, tokenizer, vl_chat_processor = load_janus()
-    trie = build_trie(vlm, tokenizer, vl_chat_processor)
+    trie = build_trie(tag_dict, vl_chat_processor)
     
     # 3. Annotation 데이터셋 로드
     queries = load_slideVQA_annotations(decks, args.dataset_base_dir, "test")

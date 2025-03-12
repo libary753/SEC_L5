@@ -1,7 +1,6 @@
 import os
-import json
-from trie import Trie
-from utils import load_janus, load_slideVQA_annotations, load_index, str2bool, get_user_prompot, get_assistant_prompot
+from trie import build_trie
+from utils import load_janus, load_parsing_results, get_user_prompot, get_assistant_prompot
 import torch
 from tqdm import tqdm
 from collections import Counter
@@ -17,18 +16,7 @@ Your task is to analyze its content and suggest a set of keywords that can be us
 - Avoid overly generic words that might reduce the effectiveness of the retrieval process.
 """
 
-# trie 만들기
-def build_trie(vlm, tokenizer, vl_chat_processor):
-    # Keyword들을 encoding
-    input_ids = []
-    deck_ids = []
-    for tag, deck_idx in tag_dict.items():
-        input_id = vl_chat_processor.tokenizer.encode(tag)[1:]
-        input_ids.append(input_id)
-        deck_ids.append(deck_idx)
         
-    trie = Trie(input_ids, deck_ids) # input_ids로 trie를 만들고, leaf에 deck_ids를 저장함
-    return trie
 
 def generate_tags(
     query, 
@@ -78,6 +66,7 @@ def generate_tags(
     inputs_embeds = inputs_embeds.repeat((beam_size, 1, 1))
     
     # 4. Trie를 따라서 tag generation -> retrieval
+    outputs = None
     with torch.no_grad():
         for i in tqdm(range(max_tag_len)):
             # 4.1. Vlm inference
@@ -252,12 +241,12 @@ def load_slideVQA_annotations_i2d(deck_dict):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--index_dir", type=str, default="output/indexing_i2d")
+    parser.add_argument("--index_dir", type=str, default="output/parsing_i2d")
     parser.add_argument("--dataset_base_dir", type=str, default="SlideVQA")
     args = parser.parse_args()
     
     # 1. 인덱싱해둔 데이터셋 로드
-    tag_dict, deck_dict, decks, deck_indices = load_index(args.index_dir, skip_1st=True)
+    tag_dict, deck_dict, decks, deck_indices = load_parsing_results(args.index_dir, skip_1st=True)
     
     # 1.2. 각 덱의 가장 첫 이미지 경로 가져오기 -> Query로 사용
     queries = []
@@ -275,7 +264,7 @@ if __name__ == "__main__":
     # 2.1 Janus 로드
     vlm, tokenizer, vl_chat_processor = load_janus()
     # 2.2 Trie 빌드
-    trie = build_trie(vlm, tokenizer, vl_chat_processor)
+    trie = build_trie(tag_dict, vl_chat_processor)
     
     # 4. query들에 대해 tag 생성하고, tag들을 포함하는 deck들을 이용하여 성능 집계
     retrieval(queries, trie, vlm, tokenizer, vl_chat_processor)

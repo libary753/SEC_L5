@@ -190,20 +190,6 @@ def extract_data_from_slide_image(image_path, vlm, tokenizer, vl_chat_processor)
     # 5. 생성한 dictionary 데이터 
     return data
 
-json_schema_tag_refine = """```json
-{
-  "title": @,
-  "content": @,
-  "metadata": {
-    "tags": [@],  # As many as possible
-    "tl;dr": @
-}
-```"""
-
-def refine_tag():
-    # Image와 Tag를 보여주고, tag가 잘 나왔는지 체크    
-    return    
-
 # 20장의 slide 데이터로부터 전체를 요약하는 json을 생성함 -> 아직까지는 크게 유용하지는 않음.
 def extract_data_from_overall_data(datas, vlm, tokenizer, vl_chat_processor, refine=True):
     # 1. 20장의 slide 데이터를 하나의 json으로 연결
@@ -277,7 +263,7 @@ def extract_data_from_overall_data(datas, vlm, tokenizer, vl_chat_processor, ref
     return data
  
 # 생성된 
-def indexing(decks, vlm, tokenizer, vl_chat_processor, out_dir="output/indexing", skip_1st_page=False, subset=-1, overwrite=True):
+def parsing(decks, vlm, tokenizer, vl_chat_processor, out_dir="output/parsing", skip_1st_page=False, subset=-1, overwrite=True):
     os.makedirs(out_dir, exist_ok=True)
     
     for deck_id, deck in tqdm(enumerate(decks), total=len(decks)):  
@@ -309,7 +295,7 @@ def indexing(decks, vlm, tokenizer, vl_chat_processor, out_dir="output/indexing"
         with open(output_json_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
         
-        # 4. 사전에 지정한 subset 까지만 indexing -> 디버깅용
+        # 4. 사전에 지정한 subset 까지만 parsing -> 디버깅용
         if deck_id + 1 == subset:
             break
                 
@@ -317,11 +303,11 @@ def indexing(decks, vlm, tokenizer, vl_chat_processor, out_dir="output/indexing"
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip_1st_page", type=str2bool, default=False)
-    parser.add_argument("--out_dir", type=str, default="output/indexing")
+    parser.add_argument("--out_dir", type=str, default="output/parsing")
     parser.add_argument("--dataset_base_dir", type=str, default="SlideVQA") 
     args = parser.parse_args()
     
     vlm, tokenizer, vl_chat_processor = load_janus() # 1. janus 모델 로드
     decks = load_slideVQA_images() # 2.slideVQA 데이터셋 로드
-    indexing(decks, vlm, tokenizer, vl_chat_processor, out_dir=args.out_dir, skip_1st_page=args.skip_1st_page) # 3. 인덱싱 -> 덱별로 json 저장
+    parsing(decks, vlm, tokenizer, vl_chat_processor, out_dir=args.out_dir, skip_1st_page=args.skip_1st_page) # 3. 파싱 -> 덱별로 json 저장
     
